@@ -3,6 +3,7 @@ import User from '@/models/User';
 import MedicalRecord from '@/models/MedicalRecord';
 import AccessLog from '@/models/AccessLog';
 import { verifyToken } from '@/lib/auth';
+import { authenticateToken } from '@/middleware/auth';
 
 export async function POST(request) {
   try {
@@ -13,6 +14,14 @@ export async function POST(request) {
 
     if (!qrToken) {
       return Response.json({ error: 'QR token is required' }, { status: 400 });
+    }
+
+    // Try to authenticate the emergency responder first
+    const auth = await authenticateToken(request);
+    let emergencyUserId = null;
+    
+    if (!auth.error && auth.user && auth.user.role === 'emergency') {
+      emergencyUserId = auth.user._id;
     }
 
     // Verify the QR token
@@ -41,8 +50,8 @@ export async function POST(request) {
 
     const accessLog = new AccessLog({
       patientId: patient._id,
-      accessorId: null, // Anonymous emergency access
-      accessType: 'emergency-access',
+      accessorId: emergencyUserId, // Will be null for anonymous access
+      accessType: emergencyUserId ? 'emergency-access' : 'qr-access',
       accessReason: 'Emergency QR code access',
       ipAddress: clientIp,
       userAgent: userAgent,
