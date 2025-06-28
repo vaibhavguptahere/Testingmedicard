@@ -171,52 +171,6 @@ export default function SharedAccess() {
     return colors[status] || colors.pending;
   };
 
-  // Mock data for demonstration
-  const mockSharedAccess = [
-    {
-      id: '1',
-      doctor: {
-        name: 'Dr. Sarah Johnson',
-        email: 'sarah.johnson@hospital.com',
-        specialization: 'Cardiology',
-      },
-      accessLevel: 'read',
-      status: 'active',
-      grantedAt: new Date('2024-01-15'),
-      expiresAt: new Date('2024-02-15'),
-      recordCategories: ['lab-results', 'imaging'],
-    },
-    {
-      id: '2',
-      doctor: {
-        name: 'Dr. Michael Chen',
-        email: 'michael.chen@clinic.com',
-        specialization: 'General Practice',
-      },
-      accessLevel: 'write',
-      status: 'active',
-      grantedAt: new Date('2024-01-10'),
-      expiresAt: new Date('2024-03-10'),
-      recordCategories: ['all'],
-    },
-  ];
-
-  const mockAccessRequests = [
-    {
-      id: '1',
-      doctor: {
-        name: 'Dr. Emily Rodriguez',
-        email: 'emily.rodriguez@hospital.com',
-        specialization: 'Dermatology',
-      },
-      requestedAt: new Date('2024-01-20'),
-      reason: 'Follow-up consultation for skin condition',
-      accessLevel: 'read',
-      recordCategories: ['imaging', 'consultation'],
-      status: 'pending',
-    },
-  ];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -292,7 +246,7 @@ export default function SharedAccess() {
       </div>
 
       {/* Access Requests */}
-      {mockAccessRequests.length > 0 && (
+      {accessRequests.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -305,7 +259,7 @@ export default function SharedAccess() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {mockAccessRequests.map((request) => (
+              {accessRequests.map((request) => (
                 <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
@@ -357,9 +311,9 @@ export default function SharedAccess() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {mockSharedAccess.length > 0 ? (
+          {sharedAccess.length > 0 ? (
             <div className="space-y-4">
-              {mockSharedAccess.map((access) => (
+              {sharedAccess.map((access) => (
                 <div key={access.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">

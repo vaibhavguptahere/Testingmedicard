@@ -76,6 +76,13 @@ export async function GET(request) {
         createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
       }).populate('patientId', 'profile.firstName profile.lastName');
 
+      // Get denied requests
+      const deniedRequests = await AccessRequest.find({
+        doctorId: user._id,
+        status: 'denied',
+        createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+      }).populate('patientId', 'profile.firstName profile.lastName');
+
       approvedRequests.forEach(request => {
         notifications.push({
           id: request._id.toString(),
@@ -88,6 +95,21 @@ export async function GET(request) {
             patientName: `${request.patientId.profile.firstName} ${request.patientId.profile.lastName}`,
             accessLevel: request.accessLevel,
             expiresAt: request.expiresAt
+          },
+        });
+      });
+
+      deniedRequests.forEach(request => {
+        notifications.push({
+          id: request._id.toString(),
+          type: 'access_denied',
+          title: 'Access Denied',
+          message: `${request.patientId.profile.firstName} ${request.patientId.profile.lastName} has denied your access request`,
+          timestamp: request.respondedAt || request.createdAt,
+          read: false,
+          data: {
+            patientName: `${request.patientId.profile.firstName} ${request.patientId.profile.lastName}`,
+            reason: request.responseMessage
           },
         });
       });

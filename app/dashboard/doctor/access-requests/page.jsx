@@ -21,17 +21,20 @@ import {
   XCircle,
   Eye,
   Send,
-  FileText
+  FileText,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export default function DoctorSharedAccess() {
+export default function DoctorAccessRequests() {
   const { user } = useAuth();
   const [patients, setPatients] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showRequestDialog, setShowRequestDialog] = useState(false);
+  const [editingRequest, setEditingRequest] = useState(null);
 
   const [requestForm, setRequestForm] = useState({
     patientEmail: '',
@@ -97,13 +100,7 @@ export default function DoctorSharedAccess() {
       if (response.ok) {
         toast.success('Access request sent successfully');
         setShowRequestDialog(false);
-        setRequestForm({
-          patientEmail: '',
-          reason: '',
-          accessLevel: 'read',
-          recordCategories: ['all'],
-          urgency: 'routine',
-        });
+        resetForm();
         fetchAccessRequests();
       } else {
         const error = await response.json();
@@ -112,6 +109,80 @@ export default function DoctorSharedAccess() {
     } catch (error) {
       toast.error(error.message);
     }
+  };
+
+  const handleEditRequest = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(`/api/auth/doctor/access-requests/${editingRequest}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestForm),
+      });
+
+      if (response.ok) {
+        toast.success('Access request updated successfully');
+        setEditingRequest(null);
+        resetForm();
+        fetchAccessRequests();
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update access request');
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleDeleteRequest = async (requestId) => {
+    if (!confirm('Are you sure you want to delete this access request?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/auth/doctor/access-requests/${requestId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (response.ok) {
+        toast.success('Access request deleted successfully');
+        fetchAccessRequests();
+      } else {
+        throw new Error('Failed to delete access request');
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const resetForm = () => {
+    setRequestForm({
+      patientEmail: '',
+      reason: '',
+      accessLevel: 'read',
+      recordCategories: ['all'],
+      urgency: 'routine',
+    });
+    setShowRequestDialog(false);
+    setEditingRequest(null);
+  };
+
+  const startEdit = (request) => {
+    setRequestForm({
+      patientEmail: request.patientEmail,
+      reason: request.reason,
+      accessLevel: request.accessLevel,
+      recordCategories: request.recordCategories,
+      urgency: request.urgency,
+    });
+    setEditingRequest(request.id);
+    setShowRequestDialog(true);
   };
 
   const getAccessLevelColor = (level) => {
@@ -129,6 +200,7 @@ export default function DoctorSharedAccess() {
       expired: 'bg-red-100 text-red-800',
       pending: 'bg-yellow-100 text-yellow-800',
       denied: 'bg-gray-100 text-gray-800',
+      approved: 'bg-green-100 text-green-800',
     };
     return colors[status] || colors.pending;
   };
@@ -142,61 +214,6 @@ export default function DoctorSharedAccess() {
     return colors[urgency] || colors.routine;
   };
 
-  // Mock data for demonstration
-  const mockPatients = [
-    {
-      id: '1',
-      profile: {
-        firstName: 'John',
-        lastName: 'Smith',
-        phone: '+1-555-0123',
-        dateOfBirth: '1985-03-15',
-      },
-      recordCount: 8,
-      lastAccess: new Date('2024-01-20'),
-      accessLevel: 'read',
-      status: 'active',
-    },
-    {
-      id: '2',
-      profile: {
-        firstName: 'Sarah',
-        lastName: 'Johnson',
-        phone: '+1-555-0124',
-        dateOfBirth: '1990-07-22',
-      },
-      recordCount: 12,
-      lastAccess: new Date('2024-01-19'),
-      accessLevel: 'write',
-      status: 'active',
-    },
-  ];
-
-  const mockAccessRequests = [
-    {
-      id: '1',
-      patientEmail: 'emily.davis@email.com',
-      patientName: 'Emily Davis',
-      requestedAt: new Date('2024-01-20'),
-      reason: 'Follow-up consultation for cardiac evaluation',
-      accessLevel: 'read',
-      recordCategories: ['lab-results', 'imaging'],
-      status: 'pending',
-      urgency: 'urgent',
-    },
-    {
-      id: '2',
-      patientEmail: 'michael.brown@email.com',
-      patientName: 'Michael Brown',
-      requestedAt: new Date('2024-01-18'),
-      reason: 'Routine checkup and medication review',
-      accessLevel: 'read',
-      recordCategories: ['all'],
-      status: 'denied',
-      urgency: 'routine',
-    },
-  ];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -208,19 +225,24 @@ export default function DoctorSharedAccess() {
         </div>
         <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={() => setEditingRequest(null)}>
               <Send className="mr-2 h-4 w-4" />
               Request Access
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Request Patient Access</DialogTitle>
+              <DialogTitle>
+                {editingRequest ? 'Edit Access Request' : 'Request Patient Access'}
+              </DialogTitle>
               <DialogDescription>
-                Send a request to access a patient's medical records
+                {editingRequest 
+                  ? 'Update your access request details'
+                  : 'Send a request to access a patient\'s medical records'
+                }
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleRequestAccess} className="space-y-4">
+            <form onSubmit={editingRequest ? handleEditRequest : handleRequestAccess} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="patientEmail">Patient Email</Label>
                 <Input
@@ -230,6 +252,7 @@ export default function DoctorSharedAccess() {
                   onChange={(e) => setRequestForm({ ...requestForm, patientEmail: e.target.value })}
                   placeholder="patient@email.com"
                   required
+                  disabled={editingRequest}
                 />
               </div>
               
@@ -280,10 +303,17 @@ export default function DoctorSharedAccess() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full">
-                <Send className="mr-2 h-4 w-4" />
-                Send Request
-              </Button>
+              <div className="flex space-x-2">
+                <Button type="submit" className="flex-1">
+                  <Send className="mr-2 h-4 w-4" />
+                  {editingRequest ? 'Update Request' : 'Send Request'}
+                </Button>
+                {editingRequest && (
+                  <Button type="button" variant="outline" onClick={resetForm}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
             </form>
           </DialogContent>
         </Dialog>
@@ -301,9 +331,9 @@ export default function DoctorSharedAccess() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {mockAccessRequests.length > 0 ? (
+          {accessRequests.length > 0 ? (
             <div className="space-y-4">
-              {mockAccessRequests.map((request) => (
+              {accessRequests.map((request) => (
                 <div key={request.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
@@ -326,9 +356,25 @@ export default function DoctorSharedAccess() {
                   </div>
                   <div className="flex space-x-2">
                     {request.status === 'pending' && (
-                      <Button size="sm" variant="outline" disabled>
-                        <Clock className="mr-1 h-4 w-4" />
-                        Pending
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => startEdit(request)}>
+                          <Edit className="mr-1 h-4 w-4" />
+                          Edit
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleDeleteRequest(request.id)}
+                        >
+                          <Trash2 className="mr-1 h-4 w-4" />
+                          Delete
+                        </Button>
+                      </>
+                    )}
+                    {request.status === 'approved' && (
+                      <Button size="sm" variant="outline">
+                        <Eye className="mr-1 h-4 w-4" />
+                        View Records
                       </Button>
                     )}
                     {request.status === 'denied' && (
@@ -369,25 +415,25 @@ export default function DoctorSharedAccess() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {mockPatients.length > 0 ? (
+          {patients.length > 0 ? (
             <div className="space-y-4">
-              {mockPatients.map((patient) => (
+              {patients.map((patient) => (
                 <div key={patient.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                       <h4 className="font-semibold">
                         {patient.profile.firstName} {patient.profile.lastName}
                       </h4>
-                      <Badge className={getStatusColor(patient.status)}>
-                        {patient.status}
+                      <Badge className={getStatusColor('active')}>
+                        active
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{patient.profile.phone}</p>
                     <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                      <span>Last accessed: {patient.lastAccess.toLocaleDateString()}</span>
+                      <span>Last accessed: {patient.lastAccess?.toLocaleDateString()}</span>
                       <span>{patient.recordCount} records</span>
-                      <Badge className={getAccessLevelColor(patient.accessLevel)}>
-                        {patient.accessLevel}
+                      <Badge className={getAccessLevelColor('read')}>
+                        read
                       </Badge>
                     </div>
                   </div>
