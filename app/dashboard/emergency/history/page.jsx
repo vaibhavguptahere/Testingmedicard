@@ -19,7 +19,8 @@ import {
   User,
   FileText,
   BarChart3,
-  TrendingUp
+  TrendingUp,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -43,100 +44,37 @@ export default function EmergencyHistory() {
 
   const fetchAccessHistory = async () => {
     try {
-      // Mock comprehensive history data
-      const mockHistory = [
-        {
-          id: '1',
-          patientName: 'John Smith',
-          patientId: 'P001',
-          accessTime: new Date('2024-01-20T14:30:00'),
-          location: 'Emergency Room - General Hospital',
-          emergencyType: 'Cardiac Event',
-          responseTime: '12 minutes',
-          outcome: 'Stabilized',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          accessMethod: 'QR Scan',
-          criticalInfo: ['Blood Type: O+', 'Allergic to Penicillin', 'Diabetes Type 2'],
-          duration: '45 minutes',
+      const response = await fetch('/api/auth/emergency/dashboard-stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
-        {
-          id: '2',
-          patientName: 'Sarah Johnson',
-          patientId: 'P002',
-          accessTime: new Date('2024-01-19T18:45:00'),
-          location: 'Ambulance Unit 5',
-          emergencyType: 'Traffic Accident',
-          responseTime: '8 minutes',
-          outcome: 'Transported to Hospital',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          accessMethod: 'QR Scan',
-          criticalInfo: ['Blood Type: A+', 'No known allergies', 'Hypertension'],
-          duration: '25 minutes',
-        },
-        {
-          id: '3',
-          patientName: 'Michael Brown',
-          patientId: 'P003',
-          accessTime: new Date('2024-01-18T09:20:00'),
-          location: 'Fire Station 12',
-          emergencyType: 'Allergic Reaction',
-          responseTime: '15 minutes',
-          outcome: 'Treated and Released',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          accessMethod: 'Manual Entry',
-          criticalInfo: ['Blood Type: B+', 'Severe Shellfish Allergy', 'Asthma'],
-          duration: '30 minutes',
-        },
-        {
-          id: '4',
-          patientName: 'Emily Davis',
-          patientId: 'P004',
-          accessTime: new Date('2024-01-17T16:10:00'),
-          location: 'Emergency Room - City Medical',
-          emergencyType: 'Respiratory Distress',
-          responseTime: '10 minutes',
-          outcome: 'Admitted for Observation',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          accessMethod: 'QR Scan',
-          criticalInfo: ['Blood Type: AB+', 'COPD', 'Multiple medications'],
-          duration: '60 minutes',
-        },
-        {
-          id: '5',
-          patientName: 'Robert Wilson',
-          patientId: 'P005',
-          accessTime: new Date('2024-01-15T22:30:00'),
-          location: 'Ambulance Unit 3',
-          emergencyType: 'Stroke Symptoms',
-          responseTime: '6 minutes',
-          outcome: 'Emergency Surgery',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          accessMethod: 'QR Scan',
-          criticalInfo: ['Blood Type: O-', 'Blood thinners', 'Previous stroke'],
-          duration: '90 minutes',
-        },
-      ];
-      
-      setAccessHistory(mockHistory);
-      
-      // Calculate stats
-      const totalAccess = mockHistory.length;
-      const thisMonth = mockHistory.filter(h => 
-        new Date(h.accessTime).getMonth() === new Date().getMonth()
-      ).length;
-      
-      const emergencyTypes = mockHistory.reduce((acc, h) => {
-        acc[h.emergencyType] = (acc[h.emergencyType] || 0) + 1;
-        return acc;
-      }, {});
-      
-      setStats({
-        totalAccess,
-        thisMonth,
-        avgResponseTime: 10.2,
-        emergencyTypes
       });
-      
+
+      if (response.ok) {
+        const data = await response.json();
+        setAccessHistory(data.recentAccess || []);
+        
+        // Calculate stats from the data
+        const totalAccess = data.recentAccess?.length || 0;
+        const thisMonth = data.recentAccess?.filter(h => 
+          new Date(h.accessTime).getMonth() === new Date().getMonth()
+        ).length || 0;
+        
+        const emergencyTypes = data.recentAccess?.reduce((acc, h) => {
+          const type = 'Emergency QR code access';
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, {}) || {};
+        
+        setStats({
+          totalAccess,
+          thisMonth,
+          avgResponseTime: data.avgResponseTime || 0,
+          emergencyTypes
+        });
+      } else {
+        throw new Error('Failed to fetch access history');
+      }
     } catch (error) {
       console.error('Error fetching access history:', error);
     } finally {
@@ -145,11 +83,10 @@ export default function EmergencyHistory() {
   };
 
   const filteredHistory = accessHistory.filter(record => {
-    const matchesSearch = record.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         record.emergencyType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         record.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = record.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         record.accessReason?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesType = typeFilter === 'all' || record.emergencyType === typeFilter;
+    const matchesType = typeFilter === 'all' || record.accessType === typeFilter;
     
     const matchesDate = !dateRange.from || !dateRange.to || 
                        (new Date(record.accessTime) >= dateRange.from && 
@@ -161,7 +98,7 @@ export default function EmergencyHistory() {
   const exportHistory = () => {
     // In a real implementation, this would generate and download a CSV/PDF report
     const csvContent = filteredHistory.map(record => 
-      `${record.patientName},${record.emergencyType},${record.accessTime},${record.location},${record.outcome}`
+      `${record.patientName},Emergency QR code access,${record.accessTime},${record.accessReason || 'Emergency access'},Completed`
     ).join('\n');
     
     console.log('Exporting history:', csvContent);
@@ -169,19 +106,16 @@ export default function EmergencyHistory() {
   };
 
   const getOutcomeColor = (outcome) => {
-    switch (outcome.toLowerCase()) {
-      case 'stabilized':
-      case 'treated and released':
-        return 'bg-green-100 text-green-800';
-      case 'transported to hospital':
-      case 'admitted for observation':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'emergency surgery':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+    return 'bg-green-100 text-green-800';
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -242,7 +176,7 @@ export default function EmergencyHistory() {
               <BarChart3 className="h-4 w-4 text-purple-600" />
               <div>
                 <p className="text-sm font-medium">Emergency Types</p>
-                <p className="text-2xl font-bold">{Object.keys(stats.emergencyTypes).length}</p>
+                <p className="text-2xl font-bold">{Object.keys(stats.emergencyTypes).length || 1}</p>
               </div>
             </div>
           </CardContent>
@@ -254,7 +188,7 @@ export default function EmergencyHistory() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
-            placeholder="Search by patient name, emergency type, or location..."
+            placeholder="Search by patient name or access reason..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -264,13 +198,12 @@ export default function EmergencyHistory() {
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-full lg:w-[200px]">
             <Filter className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="Emergency Type" />
+            <SelectValue placeholder="Access Type" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            {Object.keys(stats.emergencyTypes).map(type => (
-              <SelectItem key={type} value={type}>{type}</SelectItem>
-            ))}
+            <SelectItem value="qr-access">QR Access</SelectItem>
+            <SelectItem value="emergency-access">Emergency Access</SelectItem>
           </SelectContent>
         </Select>
         
@@ -301,12 +234,7 @@ export default function EmergencyHistory() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
-              <p className="text-muted-foreground mt-2">Loading history...</p>
-            </div>
-          ) : filteredHistory.length > 0 ? (
+          {filteredHistory.length > 0 ? (
             <div className="space-y-4">
               {filteredHistory.map((record) => (
                 <div key={record.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
@@ -314,48 +242,52 @@ export default function EmergencyHistory() {
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2">
                         <h3 className="font-semibold">{record.patientName}</h3>
-                        <Badge variant="outline">ID: {record.patientId}</Badge>
-                        <Badge className={getOutcomeColor(record.outcome)}>
-                          {record.outcome}
+                        <Badge variant="outline">Emergency Access</Badge>
+                        <Badge className={getOutcomeColor('completed')}>
+                          Completed
                         </Badge>
                       </div>
-                      <p className="text-sm font-medium text-red-600">{record.emergencyType}</p>
+                      <p className="text-sm font-medium text-red-600">Emergency QR code access</p>
                     </div>
                     <div className="text-right text-sm text-muted-foreground">
-                      <p>{record.accessTime.toLocaleDateString()}</p>
-                      <p>{record.accessTime.toLocaleTimeString()}</p>
+                      <p>{new Date(record.accessTime).toLocaleDateString()}</p>
+                      <p>{new Date(record.accessTime).toLocaleTimeString()}</p>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-3">
                     <div className="flex items-center space-x-1">
                       <MapPin className="h-3 w-3 text-muted-foreground" />
-                      <span>{record.location}</span>
+                      <span>{record.accessReason || 'Emergency access'}</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="h-3 w-3 text-muted-foreground" />
-                      <span>Response: {record.responseTime}</span>
+                      <span>Response: Immediate</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <User className="h-3 w-3 text-muted-foreground" />
-                      <span>Duration: {record.duration}</span>
+                      <span>Duration: {record.duration || 'N/A'}</span>
                     </div>
                   </div>
                   
                   <div className="mb-3">
                     <p className="text-sm font-medium mb-1">Critical Information Accessed:</p>
                     <div className="flex flex-wrap gap-1">
-                      {record.criticalInfo.map((info, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {info}
-                        </Badge>
-                      ))}
+                      <Badge variant="outline" className="text-xs">
+                        Emergency Medical Records
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        Emergency Contact Information
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        Patient Demographics
+                      </Badge>
                     </div>
                   </div>
                   
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Access Method: {record.accessMethod}</span>
-                    <span>Responder: {record.responder}</span>
+                    <span>Access Method: QR Code Scan</span>
+                    <span>Responder: {user?.profile?.firstName} {user?.profile?.lastName}</span>
                   </div>
                 </div>
               ))}

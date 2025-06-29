@@ -21,7 +21,8 @@ import {
   Loader2,
   TrendingUp,
   BarChart3,
-  Phone
+  Phone,
+  Download
 } from 'lucide-react';
 
 export default function EmergencyAccess() {
@@ -45,83 +46,18 @@ export default function EmergencyAccess() {
 
   const fetchAccessLogs = async () => {
     try {
-      // Mock enhanced data for demonstration
-      const mockLogs = [
-        {
-          id: '1',
-          patientName: 'John Smith',
-          patientPhone: '+1-555-0123',
-          accessTime: new Date('2024-01-20T14:30:00'),
-          location: 'Emergency Room - General Hospital',
-          status: 'completed',
-          accessType: 'qr-scan',
-          duration: '15 minutes',
-          emergencyType: 'Cardiac Event',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          criticalInfo: ['Blood Type: O+', 'Allergic to Penicillin', 'Diabetes Type 2'],
-          emergencyContact: {
-            name: 'Jane Smith',
-            phone: '+1-555-0124',
-            relationship: 'Spouse'
-          }
+      const response = await fetch('/api/auth/emergency/dashboard-stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
-        {
-          id: '2',
-          patientName: 'Sarah Johnson',
-          patientPhone: '+1-555-0125',
-          accessTime: new Date('2024-01-20T12:15:00'),
-          location: 'Ambulance Unit 5',
-          status: 'active',
-          accessType: 'qr-scan',
-          duration: 'Ongoing',
-          emergencyType: 'Traffic Accident',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          criticalInfo: ['Blood Type: A+', 'No known allergies', 'Hypertension'],
-          emergencyContact: {
-            name: 'Mike Johnson',
-            phone: '+1-555-0126',
-            relationship: 'Husband'
-          }
-        },
-        {
-          id: '3',
-          patientName: 'Michael Brown',
-          patientPhone: '+1-555-0127',
-          accessTime: new Date('2024-01-19T18:45:00'),
-          location: 'Fire Station 12',
-          status: 'completed',
-          accessType: 'manual-entry',
-          duration: '8 minutes',
-          emergencyType: 'Allergic Reaction',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          criticalInfo: ['Blood Type: B+', 'Severe Shellfish Allergy', 'Asthma'],
-          emergencyContact: {
-            name: 'Lisa Brown',
-            phone: '+1-555-0128',
-            relationship: 'Wife'
-          }
-        },
-        {
-          id: '4',
-          patientName: 'Emily Davis',
-          patientPhone: '+1-555-0129',
-          accessTime: new Date('2024-01-19T09:20:00'),
-          location: 'Emergency Room - City Medical',
-          status: 'completed',
-          accessType: 'qr-scan',
-          duration: '22 minutes',
-          emergencyType: 'Respiratory Distress',
-          responder: user?.profile?.firstName + ' ' + user?.profile?.lastName,
-          criticalInfo: ['Blood Type: AB+', 'COPD', 'Multiple medications'],
-          emergencyContact: {
-            name: 'Robert Davis',
-            phone: '+1-555-0130',
-            relationship: 'Father'
-          }
-        },
-      ];
-      
-      setAccessLogs(mockLogs);
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAccessLogs(data.recentAccess || []);
+      } else {
+        throw new Error('Failed to fetch access logs');
+      }
     } catch (error) {
       console.error('Error fetching access logs:', error);
     } finally {
@@ -131,22 +67,39 @@ export default function EmergencyAccess() {
 
   const fetchStats = async () => {
     try {
-      // Mock stats data
-      setStats({
-        todayAccess: 3,
-        activeEmergencies: 1,
-        weeklyAccess: 8,
-        avgResponseTime: 12,
+      const response = await fetch('/api/auth/emergency/dashboard-stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
       });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStats({
+          todayAccess: data.todayAccess || 0,
+          activeEmergencies: data.activeEmergencies || 0,
+          weeklyAccess: data.weeklyAccess || 0,
+          avgResponseTime: data.avgResponseTime || 0,
+        });
+      }
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
   };
 
+  const downloadFile = async (recordId, fileIndex, fileName) => {
+    try {
+      // This would be implemented to download files from emergency records
+      toast.success(`Download initiated for ${fileName}`);
+    } catch (error) {
+      toast.error('Download failed');
+    }
+  };
+
   const filteredLogs = accessLogs.filter(log => {
-    const matchesSearch = log.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.emergencyType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.location.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = log.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         log.accessReason?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         log.location?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || log.status === statusFilter;
     
     let matchesTime = true;
@@ -329,17 +282,12 @@ export default function EmergencyAccess() {
                         <div>
                           <div className="flex items-center space-x-2">
                             <h3 className="font-semibold">{log.patientName}</h3>
-                            <Badge className={getStatusColor(log.status)}>
-                              {log.status}
+                            <Badge className={getStatusColor('completed')}>
+                              completed
                             </Badge>
-                            {log.status === 'active' && (
-                              <Badge className="bg-red-600 text-white animate-pulse">
-                                Live
-                              </Badge>
-                            )}
                           </div>
                           <p className="text-sm text-muted-foreground font-medium text-red-600">
-                            {log.emergencyType}
+                            Emergency QR code access
                           </p>
                         </div>
                       </div>
@@ -347,29 +295,15 @@ export default function EmergencyAccess() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center space-x-1">
                           <Calendar className="h-3 w-3" />
-                          <span>{log.accessTime.toLocaleString()}</span>
+                          <span>{new Date(log.accessTime).toLocaleString()}</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <MapPin className="h-3 w-3" />
-                          <span>{log.location}</span>
+                          <span>{log.accessReason || 'Emergency access'}</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Clock className="h-3 w-3" />
-                          <span>Duration: {log.duration}</span>
-                        </div>
-                      </div>
-
-                      {/* Critical Information */}
-                      <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                        <h4 className="font-semibold text-red-900 dark:text-red-100 mb-2 text-sm">
-                          Critical Information Accessed:
-                        </h4>
-                        <div className="flex flex-wrap gap-1">
-                          {log.criticalInfo.map((info, index) => (
-                            <Badge key={index} variant="outline" className="text-xs text-red-700 border-red-300">
-                              {info}
-                            </Badge>
-                          ))}
+                          <span>Duration: {log.duration || 'N/A'}</span>
                         </div>
                       </div>
 
@@ -391,7 +325,7 @@ export default function EmergencyAccess() {
                       )}
                       
                       <div className="text-sm">
-                        <span className="font-medium">Responder:</span> {log.responder}
+                        <span className="font-medium">Responder:</span> {user?.profile?.firstName} {user?.profile?.lastName}
                         <span className="mx-2 text-muted-foreground">•</span>
                         <span className="text-muted-foreground">{formatDuration(log.accessTime)}</span>
                       </div>

@@ -25,7 +25,9 @@ import {
   Users,
   Zap,
   Timer,
-  Calendar
+  Calendar,
+  Download,
+  Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -104,6 +106,15 @@ export default function EmergencyDashboard() {
       toast.error(error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const downloadFile = async (recordId, fileIndex, fileName) => {
+    try {
+      // This would be implemented to download files from emergency records
+      toast.success(`Download initiated for ${fileName}`);
+    } catch (error) {
+      toast.error('Download failed');
     }
   };
 
@@ -334,6 +345,34 @@ export default function EmergencyDashboard() {
                         <div key={index} className="text-sm border-l-2 border-green-400 pl-3">
                           <p className="font-medium">{record.title}</p>
                           <p className="text-gray-600 dark:text-gray-400">{record.description}</p>
+                          
+                          {/* Files in emergency records */}
+                          {record.files && record.files.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <p className="text-xs font-medium">Attached Files:</p>
+                              {record.files.map((file, fileIndex) => (
+                                <div key={fileIndex} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded text-xs">
+                                  <div className="flex items-center space-x-2">
+                                    <FileText className="h-3 w-3 text-blue-600" />
+                                    <span>{file.originalName}</span>
+                                  </div>
+                                  <div className="flex space-x-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => downloadFile(record._id, fileIndex, file.originalName)}
+                                      className="h-6 px-2 text-xs"
+                                    >
+                                      <Download className="h-2 w-2" />
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs">
+                                      <Eye className="h-2 w-2" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

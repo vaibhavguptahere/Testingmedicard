@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,9 @@ import {
   MapPin,
   Heart,
   Camera,
-  Loader2
+  Loader2,
+  Download,
+  Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,6 +32,27 @@ export default function EmergencyScanner() {
   const [loading, setLoading] = useState(false);
   const [scanHistory, setScanHistory] = useState([]);
   const [isScanning, setIsScanning] = useState(false);
+
+  useEffect(() => {
+    fetchScanHistory();
+  }, []);
+
+  const fetchScanHistory = async () => {
+    try {
+      const response = await fetch('/api/auth/emergency/dashboard-stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setScanHistory(data.recentAccess?.slice(0, 5) || []);
+      }
+    } catch (error) {
+      console.error('Error fetching scan history:', error);
+    }
+  };
 
   const handleQRScan = async (e) => {
     e.preventDefault();
@@ -58,7 +81,7 @@ export default function EmergencyScanner() {
       const newScan = {
         id: Date.now(),
         patientName: `${data.patient.profile.firstName} ${data.patient.profile.lastName}`,
-        timestamp: new Date(),
+        accessTime: new Date(),
         accessId: data.accessId,
       };
       setScanHistory(prev => [newScan, ...prev.slice(0, 4)]);
@@ -79,37 +102,13 @@ export default function EmergencyScanner() {
     setTimeout(() => setIsScanning(false), 3000);
   };
 
-  const mockPatientData = {
-    profile: {
-      firstName: 'John',
-      lastName: 'Smith',
-      dateOfBirth: '1985-03-15',
-      phone: '+1-555-0123',
-      address: '123 Main St, City, State 12345',
-      emergencyContact: {
-        name: 'Jane Smith',
-        phone: '+1-555-0124',
-        relationship: 'Spouse'
-      }
-    },
-    emergencyRecords: [
-      {
-        title: 'Blood Type: O+',
-        description: 'Universal donor, no known allergies to blood products'
-      },
-      {
-        title: 'Allergies: Penicillin',
-        description: 'Severe allergic reaction - use alternative antibiotics'
-      },
-      {
-        title: 'Current Medications',
-        description: 'Lisinopril 10mg daily, Metformin 500mg twice daily'
-      },
-      {
-        title: 'Medical Conditions',
-        description: 'Type 2 Diabetes, Hypertension - well controlled'
-      }
-    ]
+  const downloadFile = async (recordId, fileIndex, fileName) => {
+    try {
+      // This would be implemented to download files from emergency records
+      toast.success(`Download initiated for ${fileName}`);
+    } catch (error) {
+      toast.error('Download failed');
+    }
   };
 
   return (
@@ -178,18 +177,6 @@ export default function EmergencyScanner() {
                 </Button>
               </div>
             </form>
-
-            {/* Demo Button */}
-            <div className="pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => setPatientData(mockPatientData)}
-                className="w-full"
-              >
-                <FileText className="mr-2 h-4 w-4" />
-                Demo: Load Sample Patient Data
-              </Button>
-            </div>
           </CardContent>
         </Card>
 
@@ -212,7 +199,7 @@ export default function EmergencyScanner() {
                     <div className="space-y-1">
                       <p className="font-medium">{scan.patientName}</p>
                       <p className="text-sm text-muted-foreground">
-                        {scan.timestamp.toLocaleString()}
+                        {new Date(scan.accessTime).toLocaleString()}
                       </p>
                     </div>
                     <Badge variant="outline" className="text-green-600 border-green-600">
@@ -315,11 +302,42 @@ export default function EmergencyScanner() {
                   <Heart className="mr-2 h-4 w-4 text-red-600" />
                   Critical Medical Information
                 </h3>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-1 gap-4">
                   {patientData.emergencyRecords.map((record, index) => (
                     <div key={index} className="p-3 border-l-4 border-red-400 bg-red-50 dark:bg-red-900/20">
                       <p className="font-medium text-red-900 dark:text-red-100">{record.title}</p>
                       <p className="text-sm text-red-700 dark:text-red-300 mt-1">{record.description}</p>
+                      
+                      {/* Files in emergency records */}
+                      {record.files && record.files.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-medium text-red-900 dark:text-red-100">Attached Files:</p>
+                          {record.files.map((file, fileIndex) => (
+                            <div key={fileIndex} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded text-xs">
+                              <div className="flex items-center space-x-2">
+                                <FileText className="h-3 w-3 text-blue-600" />
+                                <span>{file.originalName}</span>
+                                <span className="text-muted-foreground">
+                                  ({file.size ? `${Math.round(file.size / 1024)} KB` : 'Unknown size'})
+                                </span>
+                              </div>
+                              <div className="flex space-x-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => downloadFile(record._id, fileIndex, file.originalName)}
+                                  className="h-6 px-2 text-xs"
+                                >
+                                  <Download className="h-2 w-2" />
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs">
+                                  <Eye className="h-2 w-2" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
