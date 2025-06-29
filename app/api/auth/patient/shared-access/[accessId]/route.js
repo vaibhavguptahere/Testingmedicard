@@ -1,8 +1,8 @@
 import { authenticateToken } from '@/middleware/auth';
+import MedicalRecord from '@/models/MedicalRecord';
+import connectDB from '@/lib/mongodb';
 
 export async function DELETE(request, { params }) {
-
-  const { accessId } = params;
   try {
     const auth = await authenticateToken(request);
     if (auth.error) {
@@ -14,11 +14,32 @@ export async function DELETE(request, { params }) {
       return Response.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // In production, this would revoke actual access permissions
-    console.log(`Revoking access ${accessId}`);
+    const { accessId } = params;
+
+    await connectDB();
+
+    // Remove access permissions for the specified doctor
+    const updateResult = await MedicalRecord.updateMany(
+      { 
+        patientId: user._id,
+        'accessPermissions.doctorId': accessId,
+      },
+      {
+        $pull: {
+          accessPermissions: {
+            doctorId: accessId
+          }
+        }
+      }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      return Response.json({ error: 'Access permission not found' }, { status: 404 });
+    }
 
     return Response.json({
       message: 'Access revoked successfully',
+      recordsUpdated: updateResult.modifiedCount,
     });
   } catch (error) {
     console.error('Revoke access error:', error);

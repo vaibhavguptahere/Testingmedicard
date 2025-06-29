@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Users, 
   UserPlus, 
@@ -18,7 +19,12 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  Eye
+  Eye,
+  Loader2,
+  AlertTriangle,
+  Building,
+  Mail,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,6 +35,7 @@ export default function SharedAccess() {
   const [loading, setLoading] = useState(true);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sharingAccess, setSharingAccess] = useState(false);
 
   const [shareForm, setShareForm] = useState({
     doctorEmail: '',
@@ -53,9 +60,12 @@ export default function SharedAccess() {
       if (response.ok) {
         const data = await response.json();
         setSharedAccess(data.sharedAccess || []);
+      } else {
+        throw new Error('Failed to fetch shared access');
       }
     } catch (error) {
       console.error('Error fetching shared access:', error);
+      toast.error('Failed to load shared access data');
     }
   };
 
@@ -80,6 +90,8 @@ export default function SharedAccess() {
 
   const handleShareAccess = async (e) => {
     e.preventDefault();
+    setSharingAccess(true);
+    
     try {
       const response = await fetch('/api/auth/patient/shared-access', {
         method: 'POST',
@@ -91,7 +103,8 @@ export default function SharedAccess() {
       });
 
       if (response.ok) {
-        toast.success('Access shared successfully');
+        const data = await response.json();
+        toast.success(`Access shared successfully. ${data.recordsUpdated} records updated.`);
         setShowShareDialog(false);
         setShareForm({
           doctorEmail: '',
@@ -106,6 +119,8 @@ export default function SharedAccess() {
       }
     } catch (error) {
       toast.error(error.message);
+    } finally {
+      setSharingAccess(false);
     }
   };
 
@@ -132,7 +147,11 @@ export default function SharedAccess() {
     }
   };
 
-  const revokeAccess = async (accessId) => {
+  const revokeAccess = async (accessId, doctorName) => {
+    if (!confirm(`Are you sure you want to revoke access for ${doctorName}? This will remove their access to all your medical records.`)) {
+      return;
+    }
+
     try {
       const response = await fetch(`/api/auth/patient/shared-access/${accessId}`, {
         method: 'DELETE',
@@ -142,10 +161,12 @@ export default function SharedAccess() {
       });
 
       if (response.ok) {
-        toast.success('Access revoked successfully');
+        const data = await response.json();
+        toast.success(`Access revoked successfully. ${data.recordsUpdated} records updated.`);
         fetchSharedAccess();
       } else {
-        throw new Error('Failed to revoke access');
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to revoke access');
       }
     } catch (error) {
       toast.error(error.message);
@@ -170,6 +191,20 @@ export default function SharedAccess() {
     };
     return colors[status] || colors.pending;
   };
+
+  const filteredSharedAccess = sharedAccess.filter(access =>
+    access.doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    access.doctor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    access.doctor.specialization.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -218,7 +253,6 @@ export default function SharedAccess() {
                   <SelectContent>
                     <SelectItem value="read">Read Only</SelectItem>
                     <SelectItem value="write">Read & Write</SelectItem>
-                    <SelectItem value="full">Full Access</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -239,7 +273,16 @@ export default function SharedAccess() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" className="w-full">Share Access</Button>
+              <Button type="submit" className="w-full" disabled={sharingAccess}>
+                {sharingAccess ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sharing Access...
+                  </>
+                ) : (
+                  'Share Access'
+                )}
+              </Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -299,62 +342,94 @@ export default function SharedAccess() {
         </Card>
       )}
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        <Input
+          placeholder="Search doctors by name, email, or specialization..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       {/* Current Shared Access */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
             <Users className="mr-2 h-5 w-5" />
-            Current Shared Access
+            Current Shared Access ({filteredSharedAccess.length})
           </CardTitle>
           <CardDescription>
             Doctors who currently have access to your records
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {sharedAccess.length > 0 ? (
+          {filteredSharedAccess.length > 0 ? (
             <div className="space-y-4">
-              {sharedAccess.map((access) => (
-                <div key={access.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <h4 className="font-semibold">{access.doctor.name}</h4>
-                      <Badge variant="outline">{access.doctor.specialization}</Badge>
-                      <Badge className={getStatusColor(access.status)}>
-                        {access.status}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{access.doctor.email}</p>
-                    <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                      <span>Granted: {access.grantedAt.toLocaleDateString()}</span>
-                      <span>Expires: {access.expiresAt.toLocaleDateString()}</span>
-                      <Badge className={getAccessLevelColor(access.accessLevel)}>
-                        {access.accessLevel}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-muted-foreground">Categories:</span>
-                      {access.recordCategories.includes('all') ? (
-                        <Badge variant="outline" className="text-xs">All Records</Badge>
-                      ) : (
-                        access.recordCategories.map((category) => (
-                          <Badge key={category} variant="outline" className="text-xs">
-                            {category.replace('-', ' ')}
+              {filteredSharedAccess.map((access) => (
+                <div key={access.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center space-x-3">
+                      <div>
+                        <h4 className="font-semibold">{access.doctor.name}</h4>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {access.doctor.specialization}
                           </Badge>
-                        ))
-                      )}
+                          <Badge className={getStatusColor(access.status)}>
+                            {access.status}
+                          </Badge>
+                          <Badge className={getAccessLevelColor(access.accessLevel)}>
+                            {access.accessLevel}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                      <div className="flex items-center space-x-1">
+                        <Mail className="h-3 w-3" />
+                        <span>{access.doctor.email}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Building className="h-3 w-3" />
+                        <span>{access.doctor.hospital}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Calendar className="h-3 w-3" />
+                        <span>Granted: {new Date(access.grantedAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Clock className="h-3 w-3" />
+                        <span>
+                          {access.expiresAt 
+                            ? `Expires: ${new Date(access.expiresAt).toLocaleDateString()}`
+                            : 'No expiration'
+                          }
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-4 text-sm">
+                      <div className="flex items-center space-x-1">
+                        <FileText className="h-3 w-3" />
+                        <span>{access.recordCount} records accessible</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex space-x-2">
+                  
+                  <div className="flex space-x-2 ml-4">
                     <Button size="sm" variant="outline">
                       <Eye className="mr-1 h-4 w-4" />
-                      View
+                      View Details
                     </Button>
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => revokeAccess(access.id)}
+                      onClick={() => revokeAccess(access.id, access.doctor.name)}
                     >
-                      Revoke
+                      Revoke Access
                     </Button>
                   </div>
                 </div>
@@ -363,14 +438,21 @@ export default function SharedAccess() {
           ) : (
             <div className="text-center py-12">
               <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No shared access</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                {searchTerm ? 'No matching doctors found' : 'No shared access'}
+              </h3>
               <p className="text-muted-foreground mb-4">
-                You haven't shared access with any doctors yet
+                {searchTerm 
+                  ? 'Try adjusting your search criteria'
+                  : "You haven't shared access with any doctors yet"
+                }
               </p>
-              <Button onClick={() => setShowShareDialog(true)}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Share Access
-              </Button>
+              {!searchTerm && (
+                <Button onClick={() => setShowShareDialog(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Share Access
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -409,6 +491,15 @@ export default function SharedAccess() {
               <p className="text-sm font-medium">Time-Limited</p>
               <p className="text-xs text-muted-foreground">
                 Access automatically expires based on your settings
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium">Secure Sharing</p>
+              <p className="text-xs text-muted-foreground">
+                Only share access with verified healthcare professionals
               </p>
             </div>
           </div>
