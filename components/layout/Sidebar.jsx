@@ -18,7 +18,8 @@ import {
   BarChart3,
   HeartPulse,
   Brain,
-  Stethoscope
+  Stethoscope,
+  Bot
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -51,9 +52,9 @@ export function Sidebar() {
             icon: Upload,
           },
           {
-            title: 'Smart Diagnosis',
-            href: '/dashboard/doctor/smart-diagnosis',
-            icon: Stethoscope,
+            title: 'AI Assistant',
+            href: '/dashboard/patient/ai-assistant',
+            icon: Bot,
           },
           {
             title: 'Emergency QR',
