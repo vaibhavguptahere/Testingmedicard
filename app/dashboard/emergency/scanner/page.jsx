@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   QrCode, 
   Scan, 
@@ -21,7 +22,10 @@ import {
   Camera,
   Loader2,
   Download,
-  Eye
+  Eye,
+  X,
+  Image,
+  File
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -32,6 +36,7 @@ export default function EmergencyScanner() {
   const [loading, setLoading] = useState(false);
   const [scanHistory, setScanHistory] = useState([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [viewingFile, setViewingFile] = useState(null);
 
   useEffect(() => {
     fetchScanHistory();
@@ -109,6 +114,48 @@ export default function EmergencyScanner() {
     } catch (error) {
       toast.error('Download failed');
     }
+  };
+
+  const viewFile = async (file) => {
+    try {
+      // In a real implementation, you would fetch the file content from the server
+      setViewingFile({
+        ...file,
+        content: getFilePreview(file)
+      });
+    } catch (error) {
+      toast.error('Failed to load file');
+    }
+  };
+
+  const getFilePreview = (file) => {
+    // Simulate file content based on file type
+    if (file.mimetype?.startsWith('image/')) {
+      return {
+        type: 'image',
+        url: '/api/placeholder-image'
+      };
+    } else if (file.mimetype === 'application/pdf') {
+      return {
+        type: 'pdf',
+        content: 'PDF content would be displayed here using a PDF viewer component'
+      };
+    } else if (file.mimetype?.startsWith('text/')) {
+      return {
+        type: 'text',
+        content: 'Sample medical document content:\n\nPatient: John Doe\nDate: 2024-01-20\nTest Results: Normal\nRecommendations: Continue current treatment'
+      };
+    } else {
+      return {
+        type: 'unsupported',
+        content: 'File preview not available for this file type. Please download to view.'
+      };
+    }
+  };
+
+  const getFileIcon = (mimetype) => {
+    if (mimetype?.startsWith('image/')) return Image;
+    return File;
   };
 
   return (
@@ -312,30 +359,38 @@ export default function EmergencyScanner() {
                       {record.files && record.files.length > 0 && (
                         <div className="mt-3 space-y-2">
                           <p className="text-xs font-medium text-red-900 dark:text-red-100">Attached Files:</p>
-                          {record.files.map((file, fileIndex) => (
-                            <div key={fileIndex} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded text-xs">
-                              <div className="flex items-center space-x-2">
-                                <FileText className="h-3 w-3 text-blue-600" />
-                                <span>{file.originalName}</span>
-                                <span className="text-muted-foreground">
-                                  ({file.size ? `${Math.round(file.size / 1024)} KB` : 'Unknown size'})
-                                </span>
+                          {record.files.map((file, fileIndex) => {
+                            const FileIcon = getFileIcon(file.mimetype);
+                            return (
+                              <div key={fileIndex} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded text-xs">
+                                <div className="flex items-center space-x-2">
+                                  <FileIcon className="h-3 w-3 text-blue-600" />
+                                  <span>{file.originalName}</span>
+                                  <span className="text-muted-foreground">
+                                    ({file.size ? `${Math.round(file.size / 1024)} KB` : 'Unknown size'})
+                                  </span>
+                                </div>
+                                <div className="flex space-x-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => viewFile(file)}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    <Eye className="h-2 w-2" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => downloadFile(record._id, fileIndex, file.originalName)}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    <Download className="h-2 w-2" />
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex space-x-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => downloadFile(record._id, fileIndex, file.originalName)}
-                                  className="h-6 px-2 text-xs"
-                                >
-                                  <Download className="h-2 w-2" />
-                                </Button>
-                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs">
-                                  <Eye className="h-2 w-2" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -365,6 +420,97 @@ export default function EmergencyScanner() {
           </CardContent>
         </Card>
       )}
+
+      {/* File Viewer Dialog */}
+      <Dialog open={!!viewingFile} onOpenChange={() => setViewingFile(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Viewing: {viewingFile?.originalName}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewingFile(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogTitle>
+            <DialogDescription>
+              Emergency medical file viewer
+            </DialogDescription>
+          </DialogHeader>
+          
+          {viewingFile && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  {getFileIcon(viewingFile.mimetype) === Image ? (
+                    <Image className="h-5 w-5 text-blue-600" />
+                  ) : (
+                    <File className="h-5 w-5 text-blue-600" />
+                  )}
+                  <div>
+                    <p className="font-medium">{viewingFile.originalName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {viewingFile.mimetype} • {viewingFile.size ? `${Math.round(viewingFile.size / 1024)} KB` : 'Unknown size'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => downloadFile(null, 0, viewingFile.originalName)}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
+              </div>
+              
+              <div className="border rounded-lg p-4 min-h-[400px] bg-white dark:bg-gray-900">
+                {viewingFile.content?.type === 'image' && (
+                  <div className="text-center">
+                    <div className="w-full h-96 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                      <div className="text-center">
+                        <Image className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">Image preview would be displayed here</p>
+                        <p className="text-sm text-gray-400 mt-2">
+                          In a real implementation, the actual image would be loaded from the server
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {viewingFile.content?.type === 'text' && (
+                  <div className="font-mono text-sm whitespace-pre-wrap">
+                    {viewingFile.content.content}
+                  </div>
+                )}
+                
+                {viewingFile.content?.type === 'pdf' && (
+                  <div className="text-center">
+                    <div className="w-full h-96 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                      <div className="text-center">
+                        <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">PDF viewer would be displayed here</p>
+                        <p className="text-sm text-gray-400 mt-2">
+                          In a real implementation, a PDF viewer component would be integrated
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {viewingFile.content?.type === 'unsupported' && (
+                  <div className="text-center py-12">
+                    <File className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">{viewingFile.content.content}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Emergency Protocols */}
       <Card>
