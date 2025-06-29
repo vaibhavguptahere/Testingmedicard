@@ -16,9 +16,14 @@ import {
   Bot,
   Loader2,
   Phone,
-  Mail
+  Mail,
+  MapPin,
+  Download,
+  Clock,
+  Activity
 } from 'lucide-react';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 export default function DoctorPatients() {
   const { user } = useAuth();
@@ -35,53 +40,18 @@ export default function DoctorPatients() {
 
   const fetchPatients = async () => {
     try {
-      // Mock data for demonstration
-      setPatients([
-        {
-          id: '1',
-          profile: {
-            firstName: 'John',
-            lastName: 'Smith',
-            phone: '+1-555-0123',
-            dateOfBirth: '1985-03-15',
-          },
-          recordCount: 8,
-          lastAccess: new Date('2024-01-20'),
+      const response = await fetch('/api/auth/doctor/patients', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
-        {
-          id: '2',
-          profile: {
-            firstName: 'Sarah',
-            lastName: 'Johnson',
-            phone: '+1-555-0124',
-            dateOfBirth: '1990-07-22',
-          },
-          recordCount: 12,
-          lastAccess: new Date('2024-01-19'),
-        },
-        {
-          id: '3',
-          profile: {
-            firstName: 'Michael',
-            lastName: 'Brown',
-            phone: '+1-555-0125',
-            dateOfBirth: '1978-11-08',
-          },
-          recordCount: 6,
-          lastAccess: new Date('2024-01-18'),
-        },
-        {
-          id: '4',
-          profile: {
-            firstName: 'Emily',
-            lastName: 'Davis',
-            phone: '+1-555-0126',
-            dateOfBirth: '1992-05-30',
-          },
-          recordCount: 15,
-          lastAccess: new Date('2024-01-17'),
-        },
-      ]);
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPatients(data.patients || []);
+      } else {
+        throw new Error('Failed to fetch patients');
+      }
     } catch (error) {
       console.error('Error fetching patients:', error);
       toast.error('Failed to fetch patients');
@@ -93,32 +63,18 @@ export default function DoctorPatients() {
   const fetchPatientRecords = async (patientId) => {
     setLoadingRecords(true);
     try {
-      // Mock patient records
-      const mockRecords = [
-        {
-          id: '1',
-          title: 'Blood Test Results',
-          category: 'lab-results',
-          createdAt: new Date('2024-01-15'),
-          description: 'Complete blood count and metabolic panel',
+      const response = await fetch(`/api/auth/doctor/patient-records/${patientId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
-        {
-          id: '2',
-          title: 'Chest X-Ray',
-          category: 'imaging',
-          createdAt: new Date('2024-01-10'),
-          description: 'Routine chest imaging for annual checkup',
-        },
-        {
-          id: '3',
-          title: 'Prescription - Lisinopril',
-          category: 'prescription',
-          createdAt: new Date('2024-01-08'),
-          description: 'Blood pressure medication prescription',
-        },
-      ];
-      
-      setPatientRecords(mockRecords);
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPatientRecords(data.records || []);
+      } else {
+        throw new Error('Failed to fetch patient records');
+      }
     } catch (error) {
       toast.error('Failed to fetch patient records');
     } finally {
@@ -129,6 +85,28 @@ export default function DoctorPatients() {
   const handleViewPatient = (patient) => {
     setSelectedPatient(patient);
     fetchPatientRecords(patient.id);
+  };
+
+  const downloadFile = async (patientId, recordId, fileIndex, fileName) => {
+    try {
+      const response = await fetch(`/api/auth/doctor/patient-records/${patientId}/${recordId}/download?fileIndex=${fileIndex}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Download initiated for ${fileName}`);
+        // In a real implementation, you would handle the actual file download here
+        console.log('Download URL:', data.file.downloadUrl);
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Download failed');
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
   const analyzePatientWithAI = async (patient) => {
@@ -142,7 +120,8 @@ export default function DoctorPatients() {
   const filteredPatients = patients.filter(patient =>
     `${patient.profile.firstName} ${patient.profile.lastName}`
       .toLowerCase()
-      .includes(searchTerm.toLowerCase())
+      .includes(searchTerm.toLowerCase()) ||
+    patient.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getCategoryColor = (category) => {
@@ -158,6 +137,7 @@ export default function DoctorPatients() {
   };
 
   const calculateAge = (dateOfBirth) => {
+    if (!dateOfBirth) return 'N/A';
     const today = new Date();
     const birthDate = new Date(dateOfBirth);
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -169,6 +149,14 @@ export default function DoctorPatients() {
     
     return age;
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -191,11 +179,7 @@ export default function DoctorPatients() {
       </div>
 
       {/* Patients Grid */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      ) : filteredPatients.length > 0 ? (
+      {filteredPatients.length > 0 ? (
         <div className="grid gap-4">
           {filteredPatients.map((patient) => (
             <Card key={patient.id} className="hover:shadow-md transition-shadow">
@@ -209,12 +193,26 @@ export default function DoctorPatients() {
                       <span>Age: {calculateAge(patient.profile.dateOfBirth)}</span>
                       <span className="flex items-center">
                         <Phone className="mr-1 h-3 w-3" />
-                        {patient.profile.phone}
+                        {patient.profile.phone || 'Not provided'}
+                      </span>
+                      <span className="flex items-center">
+                        <Mail className="mr-1 h-3 w-3" />
+                        {patient.email}
                       </span>
                       <span>{patient.recordCount} records</span>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge className={patient.accessLevel === 'write' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
+                        {patient.accessLevel} access
+                      </Badge>
+                      {patient.expiresAt && (
+                        <Badge variant="outline" className="text-xs">
+                          Expires: {new Date(patient.expiresAt).toLocaleDateString()}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex space-x-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -234,7 +232,7 @@ export default function DoctorPatients() {
                           View Records
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                      <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>
                             {selectedPatient?.profile.firstName} {selectedPatient?.profile.lastName} - Medical Records
@@ -263,13 +261,44 @@ export default function DoctorPatients() {
                                   </div>
                                   <div>
                                     <span className="font-medium">Date of Birth:</span>
-                                    <p>{new Date(selectedPatient.profile.dateOfBirth).toLocaleDateString()}</p>
+                                    <p>{selectedPatient.profile.dateOfBirth ? 
+                                      new Date(selectedPatient.profile.dateOfBirth).toLocaleDateString() : 
+                                      'Not provided'
+                                    }</p>
                                   </div>
                                   <div>
                                     <span className="font-medium">Phone:</span>
-                                    <p>{selectedPatient.profile.phone}</p>
+                                    <p>{selectedPatient.profile.phone || 'Not provided'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Email:</span>
+                                    <p>{selectedPatient.email}</p>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Address:</span>
+                                    <p>{selectedPatient.profile.address || 'Not provided'}</p>
                                   </div>
                                 </div>
+                                
+                                {selectedPatient.profile.emergencyContact && (
+                                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                                    <h4 className="font-semibold text-red-900 dark:text-red-100 mb-2">Emergency Contact</h4>
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                      <div>
+                                        <span className="font-medium">Name:</span>
+                                        <p>{selectedPatient.profile.emergencyContact.name}</p>
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Phone:</span>
+                                        <p>{selectedPatient.profile.emergencyContact.phone}</p>
+                                      </div>
+                                      <div>
+                                        <span className="font-medium">Relationship:</span>
+                                        <p>{selectedPatient.profile.emergencyContact.relationship}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </CardContent>
                             </Card>
 
@@ -286,23 +315,56 @@ export default function DoctorPatients() {
                                 ) : patientRecords.length > 0 ? (
                                   <div className="space-y-4">
                                     {patientRecords.map((record) => (
-                                      <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                        <div className="space-y-1">
+                                      <div key={record._id} className="border rounded-lg p-4">
+                                        <div className="flex items-center justify-between mb-2">
                                           <div className="flex items-center space-x-2">
                                             <h4 className="font-medium">{record.title}</h4>
                                             <Badge className={getCategoryColor(record.category)}>
                                               {record.category.replace('-', ' ')}
                                             </Badge>
+                                            {record.metadata?.isEmergencyVisible && (
+                                              <Badge variant="outline" className="text-red-600 border-red-600">
+                                                Emergency Visible
+                                              </Badge>
+                                            )}
                                           </div>
-                                          <p className="text-sm text-muted-foreground">{record.description}</p>
                                           <div className="flex items-center text-xs text-muted-foreground">
                                             <Calendar className="mr-1 h-3 w-3" />
-                                            {record.createdAt.toLocaleDateString()}
+                                            {new Date(record.metadata?.recordDate || record.createdAt).toLocaleDateString()}
                                           </div>
                                         </div>
-                                        <Button variant="outline" size="sm">
-                                          <FileText className="h-4 w-4" />
-                                        </Button>
+                                        
+                                        <p className="text-sm text-muted-foreground mb-3">{record.description}</p>
+                                        
+                                        {record.files && record.files.length > 0 && (
+                                          <div className="space-y-2">
+                                            <p className="text-sm font-medium">Attached Files:</p>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                              {record.files.map((file, fileIndex) => (
+                                                <div key={fileIndex} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                                                  <div className="flex items-center space-x-2">
+                                                    <FileText className="h-4 w-4 text-blue-600" />
+                                                    <div>
+                                                      <p className="text-sm font-medium">{file.originalName}</p>
+                                                      <p className="text-xs text-muted-foreground">
+                                                        {file.size ? `${Math.round(file.size / 1024)} KB` : 'Unknown size'}
+                                                      </p>
+                                                    </div>
+                                                  </div>
+                                                  {selectedPatient.accessLevel === 'write' && (
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      onClick={() => downloadFile(selectedPatient.id, record._id, fileIndex, file.originalName)}
+                                                    >
+                                                      <Download className="h-3 w-3" />
+                                                    </Button>
+                                                  )}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -318,14 +380,28 @@ export default function DoctorPatients() {
                         )}
                       </DialogContent>
                     </Dialog>
+                    <Link href={`/dashboard/doctor/patients/${patient.id}`}>
+                      <Button size="sm">
+                        <Activity className="h-4 w-4 mr-1" />
+                        Full View
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <div className="flex items-center">
-                    <Calendar className="mr-1 h-4 w-4" />
-                    Last accessed: {patient.lastAccess.toLocaleDateString()}
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center">
+                      <Calendar className="mr-1 h-4 w-4" />
+                      Access granted: {new Date(patient.grantedAt).toLocaleDateString()}
+                    </div>
+                    {patient.lastAccess && (
+                      <div className="flex items-center">
+                        <Clock className="mr-1 h-4 w-4" />
+                        Last accessed: {new Date(patient.lastAccess).toLocaleDateString()}
+                      </div>
+                    )}
                   </div>
                   <Badge variant="outline" className="text-green-600 border-green-600">
                     Active Access
