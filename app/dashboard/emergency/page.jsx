@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { 
   QrCode, 
   Scan, 
@@ -17,7 +18,14 @@ import {
   FileText,
   Phone,
   MapPin,
-  Heart
+  Heart,
+  Loader2,
+  TrendingUp,
+  BarChart3,
+  Users,
+  Zap,
+  Timer,
+  Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,41 +34,44 @@ export default function EmergencyDashboard() {
   const [qrCode, setQrCode] = useState('');
   const [patientData, setPatientData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [recentAccess, setRecentAccess] = useState([]);
   const [stats, setStats] = useState({
-    totalAccess: 0,
     todayAccess: 0,
     activeEmergencies: 0,
+    weeklyAccess: 0,
+    totalAccess: 0,
+    avgResponseTime: 0,
+    uniquePatients: 0,
+    recentAccess: [],
+    hourlyAccess: [],
+    dailyAccess: [],
+    accessByReason: [],
   });
+  const [dashboardLoading, setDashboardLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
-    // Mock data for emergency dashboard
-    setStats({
-      totalAccess: 47,
-      todayAccess: 3,
-      activeEmergencies: 1,
-    });
+    try {
+      const response = await fetch('/api/auth/emergency/dashboard-stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
 
-    setRecentAccess([
-      {
-        id: '1',
-        patientName: 'John Smith',
-        accessTime: new Date('2024-01-20T14:30:00'),
-        location: 'Emergency Room',
-        status: 'completed',
-      },
-      {
-        id: '2',
-        patientName: 'Sarah Johnson',
-        accessTime: new Date('2024-01-20T12:15:00'),
-        location: 'Ambulance Unit 5',
-        status: 'active',
-      },
-    ]);
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      } else {
+        throw new Error('Failed to fetch dashboard data');
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setDashboardLoading(false);
+    }
   };
 
   const handleQRScan = async (e) => {
@@ -72,6 +83,7 @@ export default function EmergencyDashboard() {
       const response = await fetch('/api/auth/emergency/access', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ qrToken: qrCode }),
@@ -85,12 +97,48 @@ export default function EmergencyDashboard() {
 
       setPatientData(data.patient);
       toast.success('Patient data accessed successfully');
+      
+      // Refresh dashboard data after successful access
+      fetchDashboardData();
     } catch (error) {
       toast.error(error.message);
     } finally {
       setLoading(false);
     }
   };
+
+  const getAccessTypeColor = (type) => {
+    switch (type) {
+      case 'emergency-access':
+        return 'bg-red-100 text-red-800';
+      case 'qr-access':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatDuration = (timestamp) => {
+    const now = new Date();
+    const accessTime = new Date(timestamp);
+    const diffMinutes = Math.floor((now - accessTime) / (1000 * 60));
+    
+    if (diffMinutes < 60) {
+      return `${diffMinutes}m ago`;
+    } else if (diffMinutes < 1440) {
+      return `${Math.floor(diffMinutes / 60)}h ago`;
+    } else {
+      return `${Math.floor(diffMinutes / 1440)}d ago`;
+    }
+  };
+
+  if (dashboardLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -109,14 +157,19 @@ export default function EmergencyDashboard() {
             <AlertTriangle className="mr-1 h-3 w-3" />
             Emergency Access
           </Badge>
+          {stats.activeEmergencies > 0 && (
+            <Badge className="bg-red-600 text-white animate-pulse">
+              {stats.activeEmergencies} Active
+            </Badge>
+          )}
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Access Today</CardTitle>
+            <CardTitle className="text-sm font-medium">Today's Access</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -142,13 +195,26 @@ export default function EmergencyDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Access</CardTitle>
-            <QrCode className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Weekly Access</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalAccess}</div>
+            <div className="text-2xl font-bold">{stats.weeklyAccess}</div>
             <p className="text-xs text-muted-foreground">
-              All time emergency access
+              This week's emergency access
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Response</CardTitle>
+            <Timer className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.avgResponseTime}m</div>
+            <p className="text-xs text-muted-foreground">
+              Average response time
             </p>
           </CardContent>
         </Card>
@@ -185,7 +251,7 @@ export default function EmergencyDashboard() {
               >
                 {loading ? (
                   <>
-                    <Scan className="mr-2 h-4 w-4 animate-pulse" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Accessing Patient Data...
                   </>
                 ) : (
@@ -278,7 +344,7 @@ export default function EmergencyDashboard() {
           </CardContent>
         </Card>
 
-        {/* Recent Access */}
+        {/* Recent Emergency Access */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -286,37 +352,153 @@ export default function EmergencyDashboard() {
               Recent Emergency Access
             </CardTitle>
             <CardDescription>
-              Recent patient data access logs
+              Your recent emergency patient data access
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {recentAccess.length > 0 ? (
+            {stats.recentAccess.length > 0 ? (
               <div className="space-y-4">
-                {recentAccess.map((access) => (
+                {stats.recentAccess.slice(0, 5).map((access) => (
                   <div key={access.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="space-y-1">
-                      <p className="font-medium">{access.patientName}</p>
+                      <div className="flex items-center space-x-2">
+                        <p className="font-medium">{access.patientName}</p>
+                        <Badge className={getAccessTypeColor(access.accessType)}>
+                          {access.accessType === 'qr-access' ? 'QR Scan' : 'Emergency'}
+                        </Badge>
+                      </div>
                       <p className="text-sm text-muted-foreground flex items-center">
                         <MapPin className="mr-1 h-3 w-3" />
-                        {access.location}
+                        {access.accessReason || 'Emergency access'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {access.accessTime.toLocaleString()}
+                        {formatDuration(access.accessTime)}
                       </p>
                     </div>
-                    <Badge 
-                      variant={access.status === 'active' ? 'destructive' : 'outline'}
-                      className={access.status === 'active' ? 'bg-red-100 text-red-800' : ''}
-                    >
-                      {access.status}
-                    </Badge>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">
+                        {new Date(access.accessTime).toLocaleTimeString()}
+                      </p>
+                      {access.patientPhone && (
+                        <p className="text-xs text-muted-foreground">
+                          {access.patientPhone}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ))}
+                
+                {stats.recentAccess.length > 5 && (
+                  <div className="text-center">
+                    <Button variant="outline" size="sm">
+                      View All ({stats.recentAccess.length})
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center py-8">
                 <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">No recent emergency access</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Analytics and Performance */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Performance Metrics */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <TrendingUp className="mr-2 h-5 w-5" />
+              Performance Metrics
+            </CardTitle>
+            <CardDescription>
+              Your emergency response performance this month
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Total Emergency Access</span>
+                <span className="font-medium">{stats.totalAccess}</span>
+              </div>
+              <Progress value={Math.min((stats.totalAccess / 100) * 100, 100)} className="h-2" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Unique Patients Helped</span>
+                <span className="font-medium">{stats.uniquePatients}</span>
+              </div>
+              <Progress value={Math.min((stats.uniquePatients / 50) * 100, 100)} className="h-2" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Average Response Time</span>
+                <span className="font-medium">{stats.avgResponseTime} minutes</span>
+              </div>
+              <Progress value={Math.max(100 - (stats.avgResponseTime / 30) * 100, 0)} className="h-2" />
+            </div>
+
+            <div className="pt-4 border-t">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-blue-600">{stats.todayAccess}</p>
+                  <p className="text-xs text-muted-foreground">Today</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-green-600">{stats.weeklyAccess}</p>
+                  <p className="text-xs text-muted-foreground">This Week</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-purple-600">{stats.totalAccess}</p>
+                  <p className="text-xs text-muted-foreground">All Time</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Access Patterns */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <BarChart3 className="mr-2 h-5 w-5" />
+              Access Patterns
+            </CardTitle>
+            <CardDescription>
+              Emergency access breakdown by reason
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {stats.accessByReason.length > 0 ? (
+              <div className="space-y-3">
+                {stats.accessByReason.map((reason, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+                      <span className="text-sm">{reason._id || 'Emergency QR code access'}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium">{reason.count}</span>
+                      <div className="w-20 bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full" 
+                          style={{ width: `${(reason.count / Math.max(...stats.accessByReason.map(r => r.count))) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No access data available</p>
               </div>
             )}
           </CardContent>
